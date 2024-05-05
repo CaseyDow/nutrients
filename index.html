@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Nutrition Comparison</title>
+  <link href="https://fonts.googleapis.com/css?family=Montserrat" rel="stylesheet">
+  <link href="index.css" rel="stylesheet">
+</head>
+<body>
+
+<div id="container">
+  <h2>Compare Nutrition</h2>
+  <input type="text" id="search" placeholder="Search for an object...">
+  <button onclick="submitObject()">Submit</button>
+  <div id="suggestions"></div>
+  <table id="results"></table>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.0/papaparse.min.js"></script>
+<script>
+  let cols = 0;
+  let foods;
+  fetch('data/food.csv')
+    .then(response => response.text())
+    .then(data => {
+      foods = Papa.parse(data, { header: true, delimiter: ',' }).data;
+    });
+
+  let nutrients;
+  fetch('data/food_nutrient.csv')
+    .then(response => response.text())
+    .then(data => {
+      nutrients = Papa.parse(data, { header: true, delimiter: ',' }).data;
+    });
+
+  let nutrientData;
+  fetch('data/nutrient_data.csv')
+    .then(response => response.text())
+    .then(data => {
+      const results = document.getElementById("results");
+      const headings = document.createElement("tr");
+      headings.id = "heading";
+      headings.appendChild(document.createElement("th"));
+      results.appendChild(headings);
+      nutrientData = Papa.parse(data, { header: true, delimiter: ',' }).data;
+      nutrientData.forEach(nutrient => {
+        if (nutrient.name) {
+          const div = document.createElement("tr");
+          div.id = nutrient.name;
+          const text = document.createElement("td");
+          text.classList.add("header");
+          text.innerHTML = nutrient.name;
+          div.appendChild(text);
+          results.appendChild(div);
+        } else {
+          results.appendChild(document.createElement("tr"));
+        }
+      });
+    });
+
+  let current_suggestions = [];
+  function showSuggestions(e) {
+    const input = e.target.value.toLowerCase();
+    const suggestions = document.getElementById("suggestions");
+    if (suggestions.children.length && e.data) {
+      suggestions.innerHTML = "";
+      current_suggestions
+        .filter(pair => 
+          input.split(' ').every(word => pair.food.sort_description.includes(word)))
+        .sort((a, b) => {
+          if (a.food.sort_description.startsWith(input.split(' ')[0]) && !b.food.sort_description.startsWith(input)) return -1;
+          if (b.food.sort_description.startsWith(input.split(' ')[0]) && !a.food.sort_description.startsWith(input)) return 1;
+
+          if (a.food.fields != b.food.fields) {
+              return a.food.fields - b.food.fields;
+          }
+          return a.food.sort_description.localeCompare(b.food.sort_description);
+        })
+        .forEach(pair => {
+          suggestions.appendChild(pair.option);
+        });
+      return;
+    }
+    suggestions.innerHTML = "";
+    suggestions.style.display = "block";
+    current_suggestions = [];
+    foods
+      .filter(food => 
+        food.description && input.split(' ').every(word => food.sort_description.includes(word)))
+      .sort((a, b) => {
+        if (a.sort_description.startsWith(input.split(' ')[0]) && !b.sort_description.startsWith(input)) return -1;
+        if (b.sort_description.startsWith(input.split(' ')[0]) && !a.sort_description.startsWith(input)) return 1;
+
+        if (a.fields != b.fields) {
+            return a.fields - b.fields;
+        }
+        return a.sort_description.localeCompare(b.sort_description);
+      })
+      .forEach(food => {
+        const option = document.createElement("div");
+        option.className = "suggestion-item";
+        option.textContent = food.description;
+        option.onclick = function() {
+          suggestions.style.display = "none";
+          document.getElementById("search").value = food.description;
+          suggestions.innerHTML = "";
+        };
+        suggestions.appendChild(option);
+        current_suggestions.push({food: food, option: option});
+      });
+  }
+
+  function submitObject() {
+    const input = document.getElementById("search").value;
+    const food = foods.find(food => food.description === input);
+    if (food) {
+      searchFood(food);
+    } else {
+      alert("Object not found!");
+    }
+  }
+
+  function addHeader(head, food) {
+    const close = document.createElement("div");
+    close.innerHTML = "×";
+    close.classList.add("close");
+    close.onclick = function(e) {
+      const parent = e.target.parentNode;
+      const index = Array.prototype.indexOf.call(parent.parentNode.children, parent);
+      const rows = parent.parentNode.parentNode.rows;
+      for (var j = 0; j < rows.length; j++) { 
+        if (rows[j].children.length > index)
+          rows[j].deleteCell(index);
+      } 
+    }
+    head.appendChild(close);
+
+    const label = document.createElement("p");
+    label.innerHTML += food.description;
+    head.appendChild(label);
+
+    const input = document.createElement("input");
+    input.type = "text";
+    input.classList.add("portion-input");
+    head.appendChild(input);
+
+    const button = document.createElement("button");
+    button.onclick = function(e) {
+      const parent = e.target.parentNode;
+      const index = Array.prototype.indexOf.call(parent.parentNode.children, parent);
+      const foodNutrients = nutrients.filter(nutrient => nutrient.fdc_id === food.fdc_id);
+      nutrientData.forEach(nutrient => {
+        if (nutrient.id) {
+          const data = foodNutrients.find(item => item.nutrient_id === nutrient.id);
+          const objectDiv = document.getElementById(nutrient.name);
+          const nutrientDiv = objectDiv.children.item(index);
+          const bar = nutrientDiv.children.item(0);
+          const label = bar.children.item(0);
+          if (data) {
+            let amount = (data.amount * parent.children.item(2).value);
+            label.innerHTML = (amount / 100).toPrecision(3) / 1 + nutrient.units;
+            if (parseInt(nutrient.dri) > 0) {
+              let percent = (amount / parseInt(nutrient.dri)).toPrecision(3) / 1;
+              bar.style.background = "linear-gradient(90deg, #ffaf6e " + percent + "%, #eaeaea 0%";
+              label.innerHTML += " " + percent + "%";
+            }
+          } else {
+            label.innerHTML = "Unknown";
+          }
+        }
+      });
+
+    }
+    button.innerHTML = "Submit";
+    head.appendChild(button);
+  }
+
+  function searchFood(food) {
+    const foodNutrients = nutrients.filter(nutrient => nutrient.fdc_id === food.fdc_id);
+    const heading = document.getElementById("heading");
+    const header = document.createElement("th");
+    addHeader(header, food);
+    heading.appendChild(header);
+    nutrientData.forEach(nutrient => {
+      if (nutrient.id) {
+        const data = foodNutrients.find(item => item.nutrient_id === nutrient.id);
+        const objectDiv = document.getElementById(nutrient.name);
+        const nutrientDiv = document.createElement("td");
+        const label = document.createElement("p");
+        const bar = document.createElement("div");
+        nutrientDiv.classList.add("nutrient");
+        label.classList.add("label");
+        bar.classList.add("progress-bar");
+        if (data) {
+          label.innerHTML = data.amount + nutrient.units;
+          if (parseInt(nutrient.dri) > 0) {
+            let percent = (data.amount / parseInt(nutrient.dri) * 100).toPrecision(3) / 1;
+            bar.style.background = "linear-gradient(90deg, #ffaf6e " + percent + "%, #eaeaea 0%";
+            label.innerHTML += " " + percent + "%";
+          }
+        } else {
+          label.innerHTML = "Unknown";
+        }
+        if (parseInt(nutrient.dri) < 1) {
+          bar.style.background = "none";
+        }
+        bar.appendChild(label);
+        nutrientDiv.appendChild(bar);
+        objectDiv.appendChild(nutrientDiv);
+      }
+    });
+  }
+
+
+  document.getElementById("search").addEventListener("input", showSuggestions);
+</script>
+
+</body>
+</html>

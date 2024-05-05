@@ -1,0 +1,69 @@
+body {
+  background-color: #ffdab7;
+}
+#container {
+  max-width: 90vw;
+  height: 100%;
+  margin: auto;
+  margin-top: 5vh;
+  font-family: "Montserrat";
+  background-color: #ffffff;
+  padding: 20px;
+}
+#suggestions {
+  border: 1px solid #ccc;
+  border-radius: 5px;
+  display: none;
+  height: 200px;
+  overflow-y:auto;
+}
+.suggestion-item {
+  cursor: pointer;
+  padding: 5px;
+}
+#results {
+  border: 1px solid #ccc;
+  margin-top: 20px;
+  padding: 10px;
+  width: 100%;
+  table-layout: fixed;
+}
+.header {
+  text-align: right;
+}
+.nutrient {
+  height: 20px;
+  margin: 2px;
+}
+.label {
+  height: 100%;
+  padding: 3px;
+  margin: auto;
+  font-size: 12px;
+}
+.progress-bar {
+  background: #eaeaea;
+  width: 100%;
+  height: 20px;
+  border-radius: 5px;
+  display: inline;
+  float: left;
+}
+.close {
+  float: right;
+  cursor: pointer;
+}
+h2 {
+  margin: 0;
+  padding: 0;
+}
+p {
+  margin: 0;
+  padding: 0;
+}
+th:first-child {
+  width: 20%;
+}
+tr {
+  height: 20px;
+}
