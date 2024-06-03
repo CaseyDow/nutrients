@@ -13,7 +13,7 @@
   <h2>Compare Nutrition</h2>
   <div style="position: relative;">
     <input type="text" id="search" placeholder="Search foods...">
-    <button onclick="submitObject()" class="button">Submit</button>
+    <button onclick="submitObject()">Submit</button>
     <div id="suggestions" class="dropdown"></div>
   </div>
   <table id="results"></table>
@@ -53,16 +53,14 @@
     .then(data => {
       NUTRIENTDATA = Papa.parse(data, { header: true, delimiter: ',' }).data;
       const results = document.getElementById("results");
-      const headings = createElement("tr", results, "heading");
+      const headings = createElement("tr", results, "header-row");
       createElement("td", headings);
+      const submit_button_row = createElement("tr", results, "submit-button-row");
+      createElement("td", submit_button_row);
       NUTRIENTDATA.forEach(nutrient => {
-        if (nutrient.id) {
-          const div = createElement("tr", results, nutrient.id);
-          const text = createElement("td", div, null, ["header"]);
-          text.innerHTML = nutrient.name;
-        } else {
-          createElement("tr", results);
-        }
+        const div = createElement("tr", results, nutrient.id);
+        const text = createElement("td", div, null, ["row-header"]);
+        text.innerHTML = nutrient.name;
       });
       hideRows("1258", 6);
     });
@@ -89,19 +87,19 @@
     return element;
   }
 
-  function toggle(element, n) {
+  function toggle(element, n, hide) {
     for (let i = 0; i < n; i++) {
       element = element.nextSibling;
-      element.style.display = element.style.display == "none" ? "" : "none";
+      element.style.setProperty("display", hide ? "none" : "", "important");
     }
   }
 
   function hideRows(id, n) {
     let parent = document.getElementById(id);
-    let button = createElement("div", parent.firstChild, null, ["toggle"]);
+    let button = createElement("div", parent.firstChild, null, ["toggle-button"]);
     button.innerHTML = "⏏";
-    button.addEventListener("click", () => { toggle(parent, n); button.classList.toggle("flip") });
-    toggle(parent, n);
+    button.addEventListener("click", () => { toggle(parent, n, button.classList.contains("flip")); button.classList.toggle("flip") });
+    toggle(parent, n, true);
   }
 
   function sortSuggestions(a, b, match) {
@@ -132,26 +130,30 @@
     }
   }
 
-  function addHeader(head, food) {
-    const close = createElement("div", head, null, ["close"]);
+  function addHeader(food, uuid) {
+    const head = createElement("td", document.getElementById("header-row"), uuid);
+    const close = createElement("div", head, null, ["close-button"]);
     close.innerHTML = "×";
     close.addEventListener("click", (e) => {
-      document.getElementById(head.id).remove();
+      document.getElementById(uuid).remove();
+      document.getElementById(`${uuid}-input`).remove();
       NUTRIENTDATA.forEach(nutrient => {
         if (nutrient.id) {
+          document.getElementById(`${uuid}-${nutrient.id}`).remove();
           highlightMax(nutrient.id);
-          document.getElementById(`${head.id}-${nutrient.id}`).remove();
         }
       });
     });
 
     const label = createElement("p", head);
     label.innerHTML += food.description;
+    label.style.height = "100%";
 
-    const box = createElement("div", head, null, ["portion-input-box"]);
+    const box = createElement("td", document.getElementById("submit-button-row"), `${uuid}-input`);
+    box.style.position = "relative";
     const input = createElement("input", box, null, ["portion-input"]);
     const dropdown = createElement("div", box, null, ["dropdown"]);
-    const button = createElement("button", box, null, ["button"]);
+    const button = createElement("button", box);
     input.type = "text";
     input.addEventListener("focus", () => dropdown.style.display = "block");
     input.addEventListener("focusout", () => dropdown.style.display = "none");
@@ -163,7 +165,7 @@
       let value = parseFloat(input.value) || 100;
       input.value = "";
       NUTRIENTDATA.forEach(nutrient => {
-        if (nutrient.id) addEntry(nutrient, head.id, food.fdc_id, value);
+        if (nutrient.id) addEntry(nutrient, uuid, food.fdc_id, value);
       });
     }
 
@@ -209,11 +211,11 @@
         let percent = Math.round(amount / parseFloat(nutrient.dri) * 100) / 100;
         bar.style.background = `linear-gradient(90deg, #ffdab7 ${percent}%, #eaeaea 0%`;
         label.innerHTML += ` ${percent}%`;
-        highlightMax(nutrient.id);
       }
     } else {
       label.innerHTML = "";
     }
+    highlightMax(nutrient.id);
 
     if (parseFloat(nutrient.dri) <= 0)
       bar.style.background = "none";
@@ -221,16 +223,14 @@
   }
 
   function searchFood(food) {
-    const heading = document.getElementById("heading");
     const uuid = Date.now();
-    const header = createElement("td", heading, uuid);
-    addHeader(header, food);
+    addHeader(food, uuid);
     NUTRIENTDATA.forEach(nutrient => {
       if (nutrient.id) {
         const objectDiv = document.getElementById(nutrient.id);
-        const nutrientDiv = createElement("td", objectDiv, `${uuid}-${nutrient.id}`, ["nutrient"]);
-        const bar = createElement("div", nutrientDiv, `${uuid}-${nutrient.id}-bar`, ["progress-bar", `${nutrient.id}-bar`]);
-        const label = createElement("p", bar, `${uuid}-${nutrient.id}-label`, ["label", `${nutrient.id}-label`]);
+        const nutrientDiv = createElement("td", objectDiv, `${uuid}-${nutrient.id}`, ["nutrient-container"]);
+        const bar = createElement("div", nutrientDiv, `${uuid}-${nutrient.id}-bar`, ["nutrient-progress-bar", `${nutrient.id}-bar`]);
+        const label = createElement("p", bar, `${uuid}-${nutrient.id}-label`, ["nutrient-label", `${nutrient.id}-label`]);
         addEntry(nutrient, uuid, food.fdc_id, 100);
       }
     });
@@ -238,8 +238,9 @@
 
   function highlightMax(id) {
     const labels = Array.from(document.getElementsByClassName(`${id}-label`));
-    let max = labels.reduce((a, b) => ((parseFloat(b.textContent) > a) ? parseFloat(b.textContent) : a), 0);
+    let max = labels.reduce((a, b) => ((parseFloat(b.textContent) > a) ? parseFloat(b.textContent) : a), -1);
     labels.forEach((elem) => {
+      document.getElementById(id).classList.toggle("hide", max < 0);
       elem.parentNode.style.background = parseFloat(elem.textContent) == max ? 
         elem.parentNode.style.background.replace("(255, 218, 183)", "(255, 175, 110)") : 
         elem.parentNode.style.background.replace("(255, 175, 110)", "(255, 218, 183)");

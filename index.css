@@ -1,6 +1,25 @@
 body {
   background-color: #ffdab7;
 }
+h2 {
+  margin: 0;
+  padding: 0;
+}
+p {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+}
+td {
+  height: 20px;
+}
+td:first-child {
+  width: 20%;
+}
+input:focus {
+  outline: none;
+}
+
 #container {
   max-width: 90vw;
   min-width: 400px;
@@ -19,16 +38,16 @@ body {
   width: 100%;
   table-layout: fixed;
 }
-.header {
+.row-header {
   text-align: right;
   font-size: 12px;
   overflow: hidden;
 }
-.nutrient {
+.nutrient-container {
   height: 20px;
   margin: 2px;
 }
-.label {
+.nutrient-label {
   height: 100%;
   width: calc(100% - 6px);
   padding: 3px;
@@ -37,7 +56,7 @@ body {
   overflow: hidden;
   white-space: nowrap;
 }
-.progress-bar {
+.nutrient-progress-bar {
   background: #eaeaea;
   width: 100%;
   height: 20px;
@@ -45,36 +64,19 @@ body {
   display: inline;
   float: left;
 }
-.close {
+.close-button {
   float: right;
   cursor: pointer;
 }
-h2 {
-  margin: 0;
-  padding: 0;
-}
-p {
-  margin: 0;
-  padding: 0;
-}
-td:first-child {
-  width: 20%;
-}
-tr {
-  height: 20px;
-}
-input:focus {
-  outline: none;
-}
 
-.toggle {
+.toggle-button {
   display: inline-block;
   cursor: pointer;
   margin-left: 5px;
   transition: all 0.2s ease-in-out;
 }
 
-.toggle.flip {
+.toggle-button .flip {
   transform: rotate(180deg);
 }
 
@@ -97,10 +99,12 @@ input:focus {
   background-color: #f1f1f1;
 }
 
-.button {
-  margin-left: 5px;
+.portion-input {
+  max-width: 90%;
+  margin-right: 5px;
 }
 
-.portion-input-box {
-  position: relative;
+.hide {
+  display: none;
 }
+
