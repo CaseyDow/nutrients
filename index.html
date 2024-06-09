@@ -9,14 +9,34 @@
 </head>
 <body>
 
-<div id="container">
+<div class="container">
   <h2>Compare Nutrition</h2>
   <div style="position: relative;">
     <input type="text" id="search" placeholder="Search foods...">
-    <button onclick="submitObject()">Submit</button>
+    <button onclick="submitFood()">Submit</button>
     <div id="suggestions" class="dropdown"></div>
   </div>
-  <table id="results"></table>
+  <table id="results">
+    <tr id="header-row"><td style="width: 20%"></td></tr>
+    <tr id="submit-button-row"><td></td></tr>
+  </table>
+</div>
+
+<div class="container" style="margin-bottom: 40px;">
+  <h2>Top Nutrients</h2>
+  <div style="display: flex; width: 100%; position: relative; height: 300px;">
+    <div id="category-filter"></div>
+    <div id="nutrient-search-container">
+      <div>
+        <input type="text" id="nutrient-search" placeholder="Search nutrients...">
+        <button onclick="submitNutrient()">Submit</button>
+        <div id="nutrient-suggestions" class="dropdown"></div>
+      </div>
+      <div id="nutrient-results-container">
+        <table id="nutrient-results"></table>
+      </div>
+    </div>
+  </div>
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.0/papaparse.min.js"></script>
@@ -25,59 +45,93 @@
   class FoodItem {
     constructor(food) {
       this.food = food;
+      this.fdc_id = food.fdc_id;
       this.element = document.createElement("div");
       this.element.classList.add("dropdown-item");
       this.element.textContent = food.description;
       this.element.addEventListener("click", () => {
+        const suggestions = document.getElementById("suggestions");
         suggestions.style.display = "none";
+        suggestions.innerHTML = "";
         document.getElementById("search").value = food.description;
         document.getElementById("search").focus();
-        suggestions.innerHTML = "";
       });
       this.text = food.description.toLowerCase();
       this.fields = food.description.split(",").length;
+      this.nutrients = {};
+      this.portion = []
     }
   }
 
-  let FOODS = [];
-  fetch('data/food.csv')
-    .then(response => response.text())
-    .then(data => {
-      Papa.parse(data, { header: true, delimiter: ',' }).data
-        .forEach((food) => { if (food.description) FOODS.push(new FoodItem(food)); });
-    });
-
-  let NUTRIENTDATA;
-  fetch('data/nutrient_data.csv')
-    .then(response => response.text())
-    .then(data => {
-      NUTRIENTDATA = Papa.parse(data, { header: true, delimiter: ',' }).data;
-      const results = document.getElementById("results");
-      const headings = createElement("tr", results, "header-row");
-      createElement("td", headings);
-      const submit_button_row = createElement("tr", results, "submit-button-row");
-      createElement("td", submit_button_row);
-      NUTRIENTDATA.forEach(nutrient => {
-        const div = createElement("tr", results, nutrient.id);
-        const text = createElement("td", div, null, ["row-header"]);
-        text.innerHTML = nutrient.name;
+  class NutrientItem {
+    constructor(nutrient) {
+      this.id = nutrient.id;
+      this.dri = nutrient.dri;
+      this.units = nutrient.units;
+      this.element = document.createElement("div");
+      this.element.classList.add("dropdown-item");
+      this.element.textContent = nutrient.name;
+      this.element.addEventListener("click", () => {
+        const nutrientSuggestions = document.getElementById("nutrient-suggestions");
+        nutrientSuggestions.style.display = "none";
+        nutrientSuggestions.innerHTML = "";
+        document.getElementById("nutrient-search").value = nutrient.name;
+        document.getElementById("nutrient-search").focus();
       });
-      hideRows("1258", 6);
-    });
+      this.text = nutrient.name.toLowerCase();
+    }
+  }
 
-  let NUTRIENTS;
-  fetch('data/food_nutrient.csv')
-    .then(response => response.text())
-    .then(data => {
-      NUTRIENTS = Papa.parse(data, { header: true, delimiter: ',' }).data;
-    });
+  let FOODS, NUTRIENTS;
 
-  let PORTION;
-  fetch('data/food_portion.csv')
-    .then(response => response.text())
-    .then(data => {
-      PORTION = Papa.parse(data, { header: true, delimiter: ',' }).data;
-    });
+  Promise.all([
+    fetch('data/food.csv')
+      .then(response => response.text()),
+    fetch('data/nutrient_list.csv')
+      .then(response => response.text()),
+    fetch('data/food_nutrient.csv')
+      .then(response => response.text()),
+    fetch('data/food_portion.csv')
+      .then(response => response.text()),
+    fetch('data/food_category.csv')
+      .then(response => response.text())
+  ])
+  .then(([foodData, nutrientList, foodNutrientData, foodPortionData, foodCategory]) => {
+    const results = document.getElementById("results");
+    FOODS = Papa.parse(foodData, { header: true, delimiter: ',', dynamicTyping: true }).data
+      .reduce((map, food) => {
+        if (food.description)
+          map[food.fdc_id] = new FoodItem(food);
+        return map;
+      }, {});
+    Papa.parse(foodNutrientData, { header: true, delimiter: ',', dynamicTyping: true }).data
+      .forEach(nutrient => FOODS[nutrient.fdc_id].nutrients[nutrient.nutrient_id] = nutrient.amount);
+    Papa.parse(foodPortionData, { header: true, delimiter: ',', dynamicTyping: true }).data
+      .forEach(portion => FOODS[portion.fdc_id].portion.push(portion));
+    NUTRIENTS = Papa.parse(nutrientList, { header: true, delimiter: ',', dynamicTyping: true }).data
+      .filter(nutrient => {
+        const row = createElement("tr", results, nutrient.id);
+        const cell = createElement("td", row, null, ["row-header"]);
+        cell.innerHTML = nutrient.title ? `<strong>${nutrient.name.toUpperCase()}</strong>` : nutrient.name;
+        return nutrient.id;
+      })
+      .map((nutrient) => new NutrientItem(nutrient));
+    hideRows("1258", 6);
+
+    const categoryFilter = document.getElementById("category-filter");
+    Papa.parse(foodCategory, { header: true, delimiter: ',', dynamicTyping: true }).data
+      .forEach(data => {
+        const label = createElement("label", categoryFilter, null, ["dropdown-item"])
+        const input = createElement("input", label, `${data.id}`);
+        input.type = "checkbox";
+        input.value = data.id;
+        label.innerHTML += data.description;
+        label.htmlFor = `${data.id}`;
+        label.style.display = "block";
+      });
+  })
+  .catch(error => console.error("Error fetching data:", error));
+
 
   function createElement(type, parent, id = null, classes = []) {
     const element = document.createElement(type);
@@ -95,10 +149,13 @@
   }
 
   function hideRows(id, n) {
-    let parent = document.getElementById(id);
-    let button = createElement("div", parent.firstChild, null, ["toggle-button"]);
+    const parent = document.getElementById(id);
+    const button = createElement("div", parent.firstChild, null, ["toggle-button"]);
     button.innerHTML = "⏏";
-    button.addEventListener("click", () => { toggle(parent, n, button.classList.contains("flip")); button.classList.toggle("flip") });
+    button.addEventListener("click", () => {
+      toggle(parent, n, button.classList.contains("flip"));
+      button.classList.toggle("flip");
+    });
     toggle(parent, n, true);
   }
 
@@ -109,71 +166,89 @@
     return a.text.localeCompare(b.text);
   }
 
-  function showSuggestions(e) {
+  function showFoodSuggestions(e) {
     const input = e.target.value.toLowerCase().split(" ");
     const suggestions = document.getElementById("suggestions");
     suggestions.innerHTML = "";
     suggestions.style.display = "block";
     
-    FOODS
+    Object.values(FOODS)
       .filter(food => input.every(word => food.text.includes(word)))
       .sort((a, b) => sortSuggestions(a, b, input[0]))
       .forEach(food => suggestions.appendChild(food.element));
   }
 
-  function submitObject() {
+  function submitFood() {
     const search = document.getElementById("search").value.toLowerCase();
-    const food = FOODS.find(food => food.text == search);
+    const food = Object.values(FOODS).find(food => food.text == search);
     if (food) {
-      searchFood(food.food);
+      searchFood(food);
       document.getElementById("search").value = "";
+    }
+  }
+
+  function showNutrientSuggestions(e) {
+    const input = e.target.value.toLowerCase().split(" ");
+    const suggestions = document.getElementById("nutrient-suggestions");
+    suggestions.innerHTML = "";
+    suggestions.style.display = "block";
+    
+    NUTRIENTS
+      .filter(food => input.every(word => food.text.includes(word)))
+      .sort((a, b) => sortSuggestions(a, b, input[0]))
+      .forEach(food => suggestions.appendChild(food.element));
+  }
+
+  function submitNutrient() {
+    const search = document.getElementById("nutrient-search").value.toLowerCase();
+    const nutrient = NUTRIENTS.find(nutrient => nutrient.text == search);
+    if (nutrient) {
+      searchNutrient(nutrient);
+      document.getElementById("nutrient-search").value = "";
     }
   }
 
   function addHeader(food, uuid) {
     const head = createElement("td", document.getElementById("header-row"), uuid);
-    const close = createElement("div", head, null, ["close-button"]);
-    close.innerHTML = "×";
-    close.addEventListener("click", (e) => {
+    const closeButton = createElement("div", head, null, ["close-button"]);
+    closeButton.innerHTML = "×";
+    closeButton.addEventListener("click", (e) => {
       document.getElementById(uuid).remove();
       document.getElementById(`${uuid}-input`).remove();
-      NUTRIENTDATA.forEach(nutrient => {
-        if (nutrient.id) {
-          document.getElementById(`${uuid}-${nutrient.id}`).remove();
-          highlightMax(nutrient.id);
-        }
+      NUTRIENTS.forEach(nutrient => {
+        document.getElementById(`${uuid}-${nutrient.id}`).remove();
+        highlightMax(nutrient.id);
       });
     });
 
-    const label = createElement("p", head);
-    label.innerHTML += food.description;
-    label.style.height = "100%";
+    const label = createElement("p", head, `${uuid}-label`);
+    label.innerHTML = `${food.food.description} - 100g`;
 
-    const box = createElement("td", document.getElementById("submit-button-row"), `${uuid}-input`);
-    box.style.position = "relative";
-    const input = createElement("input", box, null, ["portion-input"]);
-    const dropdown = createElement("div", box, null, ["dropdown"]);
-    const button = createElement("button", box);
+    const inputCell = createElement("td", document.getElementById("submit-button-row"), `${uuid}-input`);
+    inputCell.style.position = "relative";
+    const input = createElement("input", inputCell, null, ["portion-input"]);
+    const dropdown = createElement("div", inputCell, null, ["dropdown"]);
+    const submitButton = createElement("button", inputCell);
+    submitButton.innerHTML = "Submit";
+    submitButton.addEventListener("click", submitFood);
     input.type = "text";
-    input.addEventListener("focus", () => dropdown.style.display = "block");
-    input.addEventListener("focusout", () => dropdown.style.display = "none");
-    input.addEventListener("input", filterDropdown);
-    input.addEventListener("keydown", (e) => { if (e.key == "Enter") submitFood(); });
     input.placeholder = "Amount";
+    input.addEventListener("focus", () => dropdown.style.display = "block");
+    input.addEventListener("blur", () => dropdown.style.display = "none");
+    input.addEventListener("keydown", (e) => { if (e.key == "Enter") submitFood(); });
+    input.addEventListener("input", () => {
+      const value = input.value.toLowerCase();
+      Array.from(dropdown.children).forEach(option => option.style.display = option.textContent.toLowerCase().includes(value) ? "block" : "none");
+    });
 
     function submitFood() {
-      let value = parseFloat(input.value) || 100;
-      input.value = "";
-      NUTRIENTDATA.forEach(nutrient => {
-        if (nutrient.id) addEntry(nutrient, uuid, food.fdc_id, value);
-      });
-    }
+      const value = parseFloat(input.value) || 100;
+      if (value < 0)
+        value = 100;
 
-    function filterDropdown() {
-      const value = input.value.toLowerCase();
-      Array.from(dropdown.children).forEach(option => {
-        option.style.display = option.textContent.toLowerCase().includes(value) ? "block" : "none";
-      });
+      input.value = "";
+      document.getElementById(`${uuid}-label`).innerHTML = `${food.food.description} - ${value}g`;
+      addEntries(food, uuid, value);
     }
 
     function addPortion(text) {
@@ -181,75 +256,101 @@
       portion.textContent = text;
       portion.addEventListener("mousedown", () => {
         input.value = "";
-        NUTRIENTDATA.forEach(nutrient => {
-          if (nutrient.id) addEntry(nutrient, head.id, food.fdc_id, parseFloat(text));
-        });
+        const amount = parseFloat(text);
+        document.getElementById(`${uuid}-label`).innerHTML = `${food.food.description} - ${text}`;
+        addEntries(food, uuid, amount);
       });
     }
 
-    const calories = Math.round(1000000 / parseFloat(NUTRIENTS.find(nutrient => {return nutrient.fdc_id == food.fdc_id && nutrient.nutrient_id == "1008"}).amount)) / 100;
     addPortion("100g");
-    addPortion(`${calories}g (100 calories)`);
-    PORTION.forEach(item => {
-      if (item.fdc_id == food.fdc_id)
+    addPortion(`${Math.round(1000000 / food.nutrients["1008"]) / 100}g (100 calories)`);
+    food.portion.forEach(item => {
         addPortion(`${item.gram_weight}g (${item.amount} ${item.modifier})`);
     });
 
-    button.innerHTML = "Submit";
-    button.addEventListener("click", submitFood);
-
   }
 
-  function addEntry(nutrient, uuid, fdc_id, amt) {
-    const data = NUTRIENTS.find(item => item.nutrient_id == nutrient.id && item.fdc_id == fdc_id);
-    const bar = document.getElementById(`${uuid}-${nutrient.id}-bar`);
-    const label = document.getElementById(`${uuid}-${nutrient.id}-label`);
-    if (data) {
-      let amount = (data.amount * amt);
-      label.innerHTML = Math.round(amount) / 100 + nutrient.units;
-      if (parseFloat(nutrient.dri) > 0) {
-        let percent = Math.round(amount / parseFloat(nutrient.dri) * 100) / 100;
-        bar.style.background = `linear-gradient(90deg, #ffdab7 ${percent}%, #eaeaea 0%`;
-        label.innerHTML += ` ${percent}%`;
+  function addEntries(food, uuid, amt) {
+    NUTRIENTS.forEach(nutrient => {
+      const data = food.nutrients[nutrient.id];
+      const bar = document.getElementById(`${uuid}-${nutrient.id}-bar`);
+      const label = document.getElementById(`${uuid}-${nutrient.id}-label`);
+      if (data) {
+        const amount = (data * amt);
+        label.innerHTML = `${Math.round(amount) / 100}${nutrient.units}`;
+        if (nutrient.dri > 0) {
+          const percent = Math.round(amount / nutrient.dri * 100) / 100;
+          bar.style.background = `linear-gradient(90deg, #ffdab7 ${percent}%, #eaeaea 0%)`;
+          label.innerHTML += ` ${percent}%`;
+        }
+      } else {
+        label.innerHTML = "";
       }
-    } else {
-      label.innerHTML = "";
-    }
-    highlightMax(nutrient.id);
+      highlightMax(nutrient.id);
 
-    if (parseFloat(nutrient.dri) <= 0)
-      bar.style.background = "none";
-
+      if (nutrient.dri <= 0)
+        bar.style.background = "none";
+    });
   }
 
   function searchFood(food) {
     const uuid = Date.now();
     addHeader(food, uuid);
-    NUTRIENTDATA.forEach(nutrient => {
-      if (nutrient.id) {
-        const objectDiv = document.getElementById(nutrient.id);
-        const nutrientDiv = createElement("td", objectDiv, `${uuid}-${nutrient.id}`, ["nutrient-container"]);
-        const bar = createElement("div", nutrientDiv, `${uuid}-${nutrient.id}-bar`, ["nutrient-progress-bar", `${nutrient.id}-bar`]);
-        const label = createElement("p", bar, `${uuid}-${nutrient.id}-label`, ["nutrient-label", `${nutrient.id}-label`]);
-        addEntry(nutrient, uuid, food.fdc_id, 100);
-      }
+    NUTRIENTS.forEach(nutrient => {
+      const row = document.getElementById(nutrient.id);
+      const cell = createElement("td", row, `${uuid}-${nutrient.id}`, ["nutrient-container"]);
+      const bar = createElement("div", cell, `${uuid}-${nutrient.id}-bar`, ["nutrient-bar", `${nutrient.id}-bar`]);
+      createElement("p", bar, `${uuid}-${nutrient.id}-label`, ["nutrient-label", `${nutrient.id}-label`]);
     });
+    addEntries(food, uuid, 100);
+  }
+
+  function searchNutrient(nutrient) {
+    const results = document.getElementById(`nutrient-results`);
+    results.innerHTML = "";
+    const selectedCategories = Array.from(document.querySelectorAll('#category-filter input:checked')).map(cb => parseInt(cb.value));
+    Object.values(FOODS)
+      .filter(data => !selectedCategories.length || selectedCategories.includes(data.food.food_category_id))
+      .sort((a, b) => ((b.nutrients[nutrient.id] || 0) - (a.nutrients[nutrient.id] || 0)))
+      .slice(0, 20)
+      .forEach(data => {
+        const row = createElement("tr", results, `${data.food.fdc_id}-top`);
+        const col1 = createElement("td", row);
+        col1.style.width = "5%";
+        const button = createElement("button", col1);
+        button.innerHTML = "+";
+        button.addEventListener("click", () => searchFood(data));
+        const col2 = createElement("td", row);
+        col2.innerHTML = data.food.description;
+        const col3 = createElement("td", row, null, ["nutrient-container"]);
+        const bar = createElement("div", col3, null, ["nutrient-bar"]);
+        const label = createElement("p", bar, null, ["nutrient-label"]);
+        const amount = data.nutrients[nutrient.id] * 100;
+        label.innerHTML = `${Math.round(amount) / 100}${nutrient.units}`;
+        const percent = Math.round(amount / nutrient.dri * 100) / 100;
+        bar.style.background = `linear-gradient(90deg, #ffaf6e ${percent}%, #eaeaea 0%)`;
+        label.innerHTML += ` ${percent}%`;
+      });
   }
 
   function highlightMax(id) {
     const labels = Array.from(document.getElementsByClassName(`${id}-label`));
-    let max = labels.reduce((a, b) => ((parseFloat(b.textContent) > a) ? parseFloat(b.textContent) : a), -1);
-    labels.forEach((elem) => {
-      document.getElementById(id).classList.toggle("hide", max < 0);
-      elem.parentNode.style.background = parseFloat(elem.textContent) == max ? 
-        elem.parentNode.style.background.replace("(255, 218, 183)", "(255, 175, 110)") : 
-        elem.parentNode.style.background.replace("(255, 175, 110)", "(255, 218, 183)");
+    const max = labels.reduce((max, label) => {
+      const value = parseFloat(label.textContent);
+      return value > max ? value : max;
+    }, -1);
+    labels.forEach((label) => {
+      label.parentNode.style.background = parseFloat(label.textContent) == max ? 
+        label.parentNode.style.background.replace("(255, 218, 183)", "(255, 175, 110)") : 
+        label.parentNode.style.background.replace("(255, 175, 110)", "(255, 218, 183)");
     });
+    document.getElementById(id).classList.toggle("hide", max < 0);
   }
 
-  document.getElementById("search").addEventListener("input", showSuggestions);
-  document.getElementById("search").addEventListener("keydown", (e) => { if (e.key == "Enter") submitObject(); });
-
+  document.getElementById("search").addEventListener("input", showFoodSuggestions);
+  document.getElementById("search").addEventListener("keydown", (e) => { if (e.key == "Enter") submitFood(); });
+  document.getElementById("nutrient-search").addEventListener("input", showNutrientSuggestions);
+  document.getElementById("nutrient-search").addEventListener("keydown", (e) => { if (e.key == "Enter") submitNutrient(); });
 </script>
 
 </body>
